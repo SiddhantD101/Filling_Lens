@@ -1,0 +1,15 @@
+{
+  "shock_date": "2026-11-03",
+  "stale_after_months": 9,
+  "material_cost_share_threshold_pct": 5.0,
+  "oil_shock": {
+    "label": "Brent crude + USD 10/bbl",
+    "unit": "USD/bbl",
+    "amount": 10
+  },
+  "fx_shock": {
+    "label": "INR depreciates 3% against USD",
+    "unit": "percent",
+    "amount": 3
+  }
+}
