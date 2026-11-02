@@ -1,48 +1,120 @@
-# Disclosure Gap Finder: Written Brief
+# FilingLens Written Brief
 
-## Problem
+## Area explored
 
-When oil prices or the rupee move sharply, analysts need to know which companies are exposed and what those companies have actually disclosed. The answer is scattered through annual reports: market-risk notes, hedging notes, management commentary and cost lines. The most useful finding is often negative: a company may show a large fuel or import-linked cost line but disclose no sensitivity.
+I explored whether AI can help people read company filings after an oil, fuel, or currency shock. The part that interested me most was not prediction. It was the quieter question: did the company clearly explain the exposure, or did it leave the reader to infer too much?
 
-This matters now because annual reports describe positions as of an earlier reporting date, while hedges roll off and shocks happen later. A disclosure that looked sufficient at year-end may not be useful after an oil or FX move.
+What surprised me was how useful a negative finding can be. If a company shows a large fuel or import cost, but does not explain what a price move would do to profit, that absence is itself important. It is also hard to present well. A raw table of extracted facts quickly becomes clutter, so the product needs to translate filings into plain language first, then let a reviewer inspect the source only when needed.
 
-In scope: public filings, extraction of oil/fuel and FX exposure disclosures, non-disclosure and staleness flags, and an analyst review step. Out of scope: EPS forecasts, price targets, hedge valuation, investment advice, scanned PDFs and private data.
+## Problem statement
 
-## Solution Design
+The user is an analyst, credit reviewer, finance team member, or diligence reviewer who needs to understand risk disclosures across many companies.
 
-The architecture separates probabilistic reading from auditable checks:
+The task is to answer, for each company:
+
+1. What exposure did the company disclose?
+2. Where did it say that?
+3. Did it explain what happens if oil, fuel, or exchange rates move?
+4. Is anything missing, stale, conflicting, or suspicious?
+
+This work happens whenever markets move sharply, when quarterly or annual reports are released, or when a portfolio review is due. In a real team this could happen weekly during volatile periods, and more heavily during earnings season.
+
+The cost today is mostly analyst time and missed consistency. Someone has to search filings, copy numbers into a spreadsheet, remember which companies were already checked, and explain why a report was trusted or not trusted. The expensive part is not only reading. It is proving where the answer came from and avoiding false confidence.
+
+## What I built
+
+I built FilingLens, a working prototype that reads filing style text, extracts oil, fuel, and FX exposure facts, verifies them against source quotes, flags disclosure gaps, and shows the result in a React workspace.
+
+The product has four main parts:
+
+1. A plain English home view that says what needs attention.
+2. A reports view that starts with a simple summary before showing evidence.
+3. A review inbox where a human can accept, reject, or mark items for follow up.
+4. A comparison view that shows which companies have larger visible exposure and which reports look incomplete.
+
+There is also a chat style copilot. It answers from the loaded reports first. If the question cannot be answered from local data, it can call an external model when an API key is configured.
+
+## What I added beyond the AI
+
+The AI is not treated as the source of truth. The important product work is around the AI:
+
+1. A fixed schema for the facts we care about.
+2. Page level storage so every answer can point back to source text.
+3. Verification that checks whether a quote and number actually appear in the source.
+4. Rules that flag missing sensitivity, stale disclosures, conflicting values, and suspicious source text.
+5. A human review layer with accept, reject, and follow up decisions.
+6. A simpler UI that hides internal scan details and shows the user what matters first.
+
+The prototype also has a deterministic baseline extractor. That matters because it gives a reproducible floor. The intended AI path can be plugged into the same schema, but code still verifies the output afterward.
+
+## Solution design
+
+The design separates reading from checking. AI can help read messy filing language, but final status should come from code and human review.
 
 ```text
-Public filings
-  -> page parser with page numbers
-  -> keyword/BM25 candidate-page retrieval
-  -> narrow extraction into a fixed schema
-  -> verifier: quote exists, number is present or unit-normalised
-  -> gap and staleness rules
-  -> exposure card and peer table
-  -> analyst sign-off
+Company filing text
+        |
+        v
+Page parser and storage
+        |
+        v
+Candidate page retrieval
+        |
+        v
+Extractor
+  AI or deterministic baseline
+        |
+        v
+Verifier
+quote present, number present, unit checked
+        |
+        v
+Gap rules
+missing explanation, stale date, conflict, unusual text
+        |
+        v
+FilingLens workspace
+summary, evidence, review inbox, comparison
+        |
+        v
+Human reviewer
+accept, reject, follow up
 ```
 
-The AI component should only locate passages and transcribe values with a page number and verbatim quote. Code owns quote verification, unit conversion, arithmetic, status assignment and gap rules. This keeps exact and probabilistic work apart.
+The human acts at the points where judgement matters: deciding whether a missing disclosure is material, whether a quote is enough, and whether an item should be shared. The AI acts only in the narrow reading step: finding and transcribing relevant disclosure text.
 
-Knowledge lives in three places: company facts in the source documents, thresholds and shock scenarios in config, and judgement in the human reviewer. If rules or disclosure formats change, the schema, retrieval terms and config must be updated.
+The current prototype uses SQLite for persistence and a Python API for analysis and review actions. The frontend is a React app. The model path is optional through OpenRouter. The local baseline works without any key.
 
-## Prototype
+## Alternatives rejected
 
-The current prototype runs without an API key and uses a deterministic extractor as the baseline. It evaluates 14 labelled synthetic examples covering clean tables, prose sensitivities, Indian number formats, hedge ratios in words, expired hedges, missing sensitivities, conflicting figures, wrong currency references and prompt-injection-like text.
+I rejected an end to end prediction tool because it would look more precise than the filings support. Forecasting profit impact would require assumptions about hedges, pass through, pricing power, volumes, and timing. That is not safe to infer from short disclosure excerpts.
 
-The generated HTML cards show each value, unit, source page, quote, gap flags, staleness and review notes. This is intentionally small but demonstrates the core design: a value is only accepted when it can be traced to source text.
+I also rejected a pure chatbot as the main interface. A chatbot is helpful for questions, but it does not give a stable review workflow, evidence status, peer comparison, or audit trail.
 
-## Risks
+A pure regex tool was useful as a baseline, but too brittle as the final answer. Filing language varies too much. The better design is a narrow AI extraction step with strict verification after it.
 
-Wrong answers are handled with quote verification, number checks and analyst sign-off. False `NOT_DISCLOSED` claims are the most sensitive risk, so the card shows searched pages and requires review. Outdated figures are handled with period-end dates and staleness warnings. Confidential data is avoided by using only public or synthetic data. Liability is limited by positioning the tool as research support, not advice.
+I also avoided a complex multi agent setup. This problem needs traceability more than orchestration. A smaller pipeline is easier to test and explain.
 
-The weakest point is retrieval. If the right page is missed, the system can wrongly flag non-disclosure. That status should be measured separately and confirmed by a human.
+## Risks and mitigations
 
-## Alternatives Rejected
+Wrong answers are the main risk. The design handles this by requiring source quotes, checking that extracted numbers are present or directly implied, and routing uncertain items to human review.
 
-An end-to-end model that predicts EPS impact is not auditable and would look more certain than it is. A chatbot over reports has no fixed schema or peer comparison. A regex-only system is useful as a baseline but brittle on real filing language. Several cooperating agents add complexity without much value for a retrieve-extract-verify workflow.
+Outdated rules are another risk. Disclosure expectations and materiality thresholds may change by sector, region, or user. The prototype keeps shock dates and thresholds in config so they can be changed without rewriting the product.
 
-## Before Investing More Time
+Confidential data is a risk if private filings or internal notes are uploaded. The prototype uses public or synthetic text only. A production version should add access control, retention rules, redaction, and clear separation between customers.
 
-The next checks are practical: add five public annual-report excerpts, confirm whether Indian companies disclose enough sensitivities to make this valuable, speak to one analyst or treasury practitioner, and decide whether the materiality threshold should be user-configurable by sector.
+Liability is a serious risk. FilingLens should not give investment advice or predict share prices. It should say what the report disclosed, what was not clear, and what a human should review.
+
+Prompt injection and hostile source text are also relevant because filings may contain text that should not control the system. The prototype flags suspicious instruction like wording in source text and treats source documents as data, not commands.
+
+The hardest risk is a false missing disclosure. If retrieval misses the right page, the system may say something was not disclosed. That is why missing items should be shown as review items, not final accusations.
+
+## What I would consider before spending more time
+
+Before investing more time, I would want to test the idea on real public annual reports. Synthetic examples are useful for proving the pipeline, but the product only becomes convincing when it handles real filing language.
+
+I would also talk to one or two actual users. The key question is whether they care more about exposure size, missing sensitivity, stale disclosures, peer comparison, or source auditability.
+
+I would check whether the same workflow should focus on oil and FX only, or whether the better wedge is broader disclosure quality review. The product may be more useful as a general filing review layer than as a narrow commodity risk tool.
+
+Finally, I would define what a good output looks like for a real user. If the goal is a report, the export matters. If the goal is review, assignment and sign off matter. If the goal is research, source coverage and recall matter most.
