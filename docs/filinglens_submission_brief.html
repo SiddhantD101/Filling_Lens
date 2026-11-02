@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FilingLens Written Brief</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      color: #151d2f;
+      background: #f5f7fb;
+      font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", Arial, sans-serif;
+      font-size: 10.4pt;
+      line-height: 1.42;
+    }
+    main {
+      max-width: 820px;
+      margin: 24px auto;
+      padding: 34px 42px;
+      border-radius: 20px;
+      background: white;
+      box-shadow: 0 24px 80px rgba(21, 29, 47, 0.12);
+    }
+    h1, h2 {
+      margin: 0;
+      font-family: "Space Grotesk", "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+      letter-spacing: -0.02em;
+    }
+    h1 {
+      font-size: 27pt;
+      line-height: 1;
+    }
+    .subtitle {
+      margin: 5px 0 2px;
+      color: #087f7b;
+      font-size: 13pt;
+      font-weight: 700;
+    }
+    .meta {
+      margin: 0 0 14px;
+      color: #69758a;
+      font-size: 9.5pt;
+    }
+    h2 {
+      margin-top: 13px;
+      color: #151d2f;
+      font-size: 13.5pt;
+    }
+    p {
+      margin: 4px 0;
+    }
+    ol, ul {
+      margin: 4px 0 4px 18px;
+      padding: 0;
+    }
+    li {
+      margin: 1px 0;
+    }
+    pre {
+      margin: 7px 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #f3f7f8;
+      color: #151d2f;
+      font-size: 8.3pt;
+      line-height: 1.16;
+      white-space: pre-wrap;
+    }
+    strong {
+      font-weight: 800;
+    }
+    .risk p {
+      margin: 3px 0;
+    }
+    @media print {
+      body {
+        background: white;
+      }
+      main {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>FilingLens</h1>
+  <p class="subtitle">A disclosure review prototype for oil, fuel, and FX exposure</p>
+  <p class="meta">Written brief for the take home submission</p>
+
+  <h2>Area explored and what surprised me</h2>
+  <p>I explored whether AI can help people read company filings after an oil, fuel, or currency shock. The part that interested me most was not prediction. It was the quieter question: did the company clearly explain the exposure, or did it leave the reader to infer too much?</p>
+  <p>What surprised me was how useful a negative finding can be. If a company shows a large fuel or import cost, but does not explain what a price move would do to profit, that absence is itself important. It is also hard to present well. A raw table of extracted facts quickly becomes clutter, so the product needs to translate filings into plain language first, then let a reviewer inspect the source only when needed.</p>
+
+  <h2>Problem statement</h2>
+  <p>The user is an analyst, credit reviewer, finance team member, or diligence reviewer who needs to understand risk disclosures across many companies.</p>
+  <p>The task is to answer four questions for each company:</p>
+  <ol>
+    <li>What exposure did the company disclose?</li>
+    <li>Where did it say that?</li>
+    <li>Did it explain what happens if oil, fuel, or exchange rates move?</li>
+    <li>Is anything missing, stale, conflicting, or suspicious?</li>
+  </ol>
+  <p>This work happens whenever markets move sharply, when quarterly or annual reports are released, or when a portfolio review is due. In a real team this could happen weekly during volatile periods, and more heavily during earnings season.</p>
+  <p>The cost today is mostly analyst time and missed consistency. Someone has to search filings, copy numbers into a spreadsheet, remember which companies were already checked, and explain why a report was trusted or not trusted. The expensive part is not only reading. It is proving where the answer came from and avoiding false confidence.</p>
+
+  <h2>What I built</h2>
+  <p>I built FilingLens, a working prototype that reads filing style text, extracts oil, fuel, and FX exposure facts, verifies them against source quotes, flags disclosure gaps, and shows the result in a React workspace.</p>
+  <p>The product has four main surfaces:</p>
+  <ul>
+    <li>a plain English home view that says what needs attention;</li>
+    <li>a reports view that starts with a simple summary before showing evidence;</li>
+    <li>a review inbox where a human can accept, reject, or mark items for follow up;</li>
+    <li>a comparison view that shows which companies have larger visible exposure and which reports look incomplete.</li>
+  </ul>
+  <p>There is also a chat style copilot. It answers from the loaded reports first. If the question cannot be answered from local data, it can call an external model when an API key is configured.</p>
+
+  <h2>What I added beyond the AI</h2>
+  <p>The AI is not treated as the source of truth. The important product work is around the AI:</p>
+  <ul>
+    <li>a fixed schema for the facts we care about;</li>
+    <li>page level storage so every answer can point back to source text;</li>
+    <li>verification that checks whether a quote and number actually appear in the source;</li>
+    <li>rules that flag missing sensitivity, stale disclosures, conflicting values, and suspicious source text;</li>
+    <li>a human review layer with accept, reject, and follow up decisions;</li>
+    <li>a simpler UI that hides internal scan details and shows the user what matters first.</li>
+  </ul>
+  <p>The prototype also has a deterministic baseline extractor. That matters because it gives a reproducible floor. The intended AI path can be plugged into the same schema, but code still verifies the output afterward.</p>
+
+  <h2>Solution design</h2>
+  <p>The design separates reading from checking. AI can help read messy filing language, but final status should come from code and human review.</p>
+  <pre>Company filing text
+        |
+        v
+Page parser and storage
+        |
+        v
+Candidate page retrieval
+        |
+        v
+Extractor: AI or deterministic baseline
+        |
+        v
+Verifier: quote present, number present, unit checked
+        |
+        v
+Gap rules: missing explanation, stale date, conflict, unusual text
+        |
+        v
+FilingLens workspace: summary, evidence, review inbox, comparison
+        |
+        v
+Human reviewer: accept, reject, follow up</pre>
+  <p>The human acts at the points where judgement matters: deciding whether a missing disclosure is material, whether a quote is enough, and whether an item should be shared. The AI acts only in the narrow reading step: finding and transcribing relevant disclosure text.</p>
+  <p>The current prototype uses SQLite for persistence and a Python API for analysis and review actions. The frontend is a React app. The model path is optional through OpenRouter. The local baseline works without any key.</p>
+
+  <h2>Alternatives rejected</h2>
+  <p>I rejected an end to end prediction tool because it would look more precise than the filings support. Forecasting profit impact would require assumptions about hedges, pass through, pricing power, volumes, and timing. That is not safe to infer from short disclosure excerpts.</p>
+  <p>I also rejected a pure chatbot as the main interface. A chatbot is helpful for questions, but it does not give a stable review workflow, evidence status, peer comparison, or audit trail.</p>
+  <p>A pure regex tool was useful as a baseline, but too brittle as the final answer. Filing language varies too much. The better design is a narrow AI extraction step with strict verification after it.</p>
+  <p>I also avoided a complex multi agent setup. This problem needs traceability more than orchestration. A smaller pipeline is easier to test and explain.</p>
+
+  <h2>Risks and mitigations</h2>
+  <div class="risk">
+    <p><strong>Wrong answers.</strong> The design requires source quotes, checks that extracted numbers are present or directly implied, and routes uncertain items to human review.</p>
+    <p><strong>Outdated rules.</strong> Disclosure expectations and materiality thresholds may change by sector, region, or user. The prototype keeps shock dates and thresholds in config so they can be changed without rewriting the product.</p>
+    <p><strong>Confidential data.</strong> The prototype uses public or synthetic text only. A production version should add access control, retention rules, redaction, and clear separation between customers.</p>
+    <p><strong>Liability.</strong> FilingLens should not give investment advice or predict share prices. It should say what the report disclosed, what was not clear, and what a human should review.</p>
+    <p><strong>Prompt injection.</strong> The prototype flags suspicious instruction like wording in source text and treats source documents as data, not commands.</p>
+    <p><strong>False missing disclosure.</strong> If retrieval misses the right page, the system may say something was not disclosed. That is why missing items should be shown as review items, not final accusations.</p>
+  </div>
+
+  <h2>Before spending more time</h2>
+  <p>Before investing more time, I would test the idea on real public annual reports. Synthetic examples are useful for proving the pipeline, but the product only becomes convincing when it handles real filing language.</p>
+  <p>I would also talk to one or two actual users. The key question is whether they care more about exposure size, missing sensitivity, stale disclosures, peer comparison, or source auditability.</p>
+  <p>I would check whether the same workflow should focus on oil and FX only, or whether the better wedge is broader disclosure quality review. The product may be more useful as a general filing review layer than as a narrow commodity risk tool.</p>
+  <p>Finally, I would define what a good output looks like for a real user. If the goal is a report, the export matters. If the goal is review, assignment and sign off matter. If the goal is research, source coverage and recall matter most.</p>
+
+  <h2>Short note on AI use</h2>
+  <p>AI helped turn the idea into an implementation plan, draft test cases, build first pass modules, and revise the submission text. Several AI suggestions were rejected, especially generic profit prediction, model confidence scores, and chatbot first product shapes. The decision I would defend without AI is the exact versus probabilistic split: let AI read varied language, but let code verify quotes, numbers, units, status, and gap rules.</p>
+</main>
+</body>
+</html>
